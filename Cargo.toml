@@ -1,12 +1,11 @@
-[package]
-name = "rust-webui"
-version = "0.1.0"
-edition = "2021"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
-webui-sys = { path = "webui-sys" }
 
 [workspace]
-members = ["webui-sys"]
+members = ["webui-sys", "rust-webui"]
+resolver = "2"
+
+
+[workspace.dependencies]
+webui-sys = { path = "webui-sys" }
+rust-webui = { path = "rust-webui" }
