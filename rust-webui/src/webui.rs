@@ -21,6 +21,25 @@ impl Window {
         let cstring = CString::new(content).unwrap();
         unsafe { ffi::webui_show(self.0, cstring.as_ptr()) }
     }
+
+    pub fn is_shown(&self) -> bool {
+        unsafe { ffi::webui_is_shown(self.0) }
+    }
+
+    pub fn set_icon(&self, icon: &str, icon_type: &str) {
+        // unsafe {ffi::webui_set_icon(self.0, icon, icon_type)}
+    }
+
+    // pub fn bind(&self, element: &str, func: fn(*mut ffi::webui_event_t)) {
+    //     let cstring = CString::new(element).unwrap();
+
+    //     // unsafe extern "C" fn wrapper
+
+    //     unsafe {
+    //         let unsafe_func: Option<unsafe extern "C" fn(*mut ffi::webui_event_t)> = Some(func);
+    //         // ffi::webui_bind(self.0, cstring.as_ptr(), Some());
+    //     }
+    // }
 }
 
 pub fn wait() {
