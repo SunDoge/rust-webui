@@ -2,14 +2,17 @@ use once_cell::sync::OnceCell;
 use std::{
     borrow::Borrow,
     collections::HashMap,
-    ffi::CString,
+    ffi::{CStr, CString},
     path::Path,
     sync::{Mutex, RwLock},
 };
 
+use std::cell::RefCell;
 use webui_sys as ffi;
 
-static CALLBACKS: OnceCell<Mutex<HashMap<usize, Box<dyn Fn() + Send + 'static>>>> = OnceCell::new();
+thread_local! {
+    static CALLBACKS: RefCell<HashMap<usize, Box<dyn Fn(Event)>>> = RefCell::new(HashMap::new());
+}
 
 #[derive(Debug)]
 #[repr(usize)]
@@ -79,29 +82,69 @@ impl Window {
         // unsafe {ffi::webui_set_icon(self.0, icon, icon_type)}
     }
 
-    pub fn bind(&self, element: &str) {
+    pub fn bind(&self, element: &str, func: impl Fn(Event) + 'static) {
         let cstring = CString::new(element).unwrap();
 
-        // unsafe extern "C" fn wrapper
+        let bind_id =
+            unsafe { ffi::webui_interface_bind(self.0, cstring.as_ptr(), Some(event_handler)) };
 
-        unsafe {
-            // let unsafe_func: Option<unsafe extern "C" fn(*mut ffi::webui_event_t)> = Some(func);
-            ffi::webui_interface_bind(self.0, cstring.as_ptr(), Some(event_handler));
+        CALLBACKS.with(move |cbs| {
+            cbs.borrow_mut().insert(bind_id, Box::new(func));
+        });
+    }
+}
+
+#[derive(Debug)]
+pub enum EventType {
+    Disconnected = 0,
+    Connected,
+    MouseClick,
+    Navigation,
+    Callback,
+}
+
+impl TryFrom<usize> for EventType {
+    type Error = ();
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(EventType::Disconnected),
+            1 => Ok(EventType::Connected),
+            2 => Ok(EventType::MouseClick),
+            3 => Ok(EventType::Navigation),
+            4 => Ok(EventType::Callback),
+            _ => Err(()),
         }
     }
+}
+
+pub struct Event {
+    pub window: Window,
+    pub event_type: EventType,
+    pub element: String,
+    pub event_number: usize,
+    pub bind_id: usize,
 }
 
 unsafe extern "C" fn event_handler(
     window: usize,
     event_type: usize,
     element_ptr: *mut std::os::raw::c_char,
-    data: usize,
+    event_number: usize,
     bind_id: usize,
 ) {
-    CALLBACKS.get().map(|cbs| {
-        cbs.lock().unwrap().get(&bind_id).map(|cb| {
-            cb();
-        });
+    CALLBACKS.with(|cbs| {
+        cbs.borrow().get(&bind_id).map(|cb| {
+            let window = Window(window);
+            let element = CStr::from_ptr(element_ptr).to_str().unwrap().to_string();
+            let event = Event {
+                window,
+                event_type: event_type.try_into().unwrap(),
+                element,
+                event_number,
+                bind_id,
+            };
+            cb(event);
+        })
     });
 }
 
