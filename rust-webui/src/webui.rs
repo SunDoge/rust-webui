@@ -1,6 +1,14 @@
-use std::ffi::CString;
+use once_cell::sync::OnceCell;
+use std::{
+    borrow::Borrow,
+    collections::HashMap,
+    ffi::CString,
+    sync::{Mutex, RwLock},
+};
 
 use webui_sys as ffi;
+
+static CALLBACKS: OnceCell<Mutex<HashMap<usize, Box<dyn Fn() + Send + 'static>>>> = OnceCell::new();
 
 pub struct Window(usize);
 
@@ -30,16 +38,30 @@ impl Window {
         // unsafe {ffi::webui_set_icon(self.0, icon, icon_type)}
     }
 
-    // pub fn bind(&self, element: &str, func: fn(*mut ffi::webui_event_t)) {
-    //     let cstring = CString::new(element).unwrap();
+    pub fn bind(&self, element: &str) {
+        let cstring = CString::new(element).unwrap();
 
-    //     // unsafe extern "C" fn wrapper
+        // unsafe extern "C" fn wrapper
 
-    //     unsafe {
-    //         let unsafe_func: Option<unsafe extern "C" fn(*mut ffi::webui_event_t)> = Some(func);
-    //         // ffi::webui_bind(self.0, cstring.as_ptr(), Some());
-    //     }
-    // }
+        unsafe {
+            // let unsafe_func: Option<unsafe extern "C" fn(*mut ffi::webui_event_t)> = Some(func);
+            ffi::webui_interface_bind(self.0, cstring.as_ptr(), Some(event_handler));
+        }
+    }
+}
+
+unsafe extern "C" fn event_handler(
+    window: usize,
+    event_type: usize,
+    element_ptr: *mut std::os::raw::c_char,
+    data: usize,
+    bind_id: usize,
+) {
+    CALLBACKS.get().map(|cbs| {
+        cbs.lock().unwrap().get(&bind_id).map(|cb| {
+            cb();
+        });
+    });
 }
 
 pub fn wait() {
