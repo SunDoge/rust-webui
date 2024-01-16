@@ -64,19 +64,21 @@ impl Default for Window {
 
 impl Window {
     pub fn new() -> Self {
-        let window_id = unsafe { ffi::webui_new_window() };
-        Self { handle: window_id }
+        let window_number = unsafe { ffi::webui_new_window() };
+        Self {
+            handle: window_number,
+        }
     }
 
     pub fn handle(&self) -> usize {
         self.handle
     }
 
-    pub fn get_window_id(&self) -> usize {
+    pub fn get_unique_window_id(&self) -> usize {
         unsafe { ffi::webui_interface_get_window_id(self.handle()) }
     }
-    
-    pub fn with_id(window_number: usize) -> Self {
+
+    pub fn with_number(window_number: usize) -> Self {
         unsafe {
             ffi::webui_new_window_id(window_number);
         }
@@ -141,6 +143,19 @@ impl Window {
             cbs.insert(bind_id, Box::new(func));
         }
     }
+
+    pub fn send_raw(&self, func: &str, buf: &[u8]) {
+        let func_cstring = CString::new(func).unwrap();
+
+        unsafe {
+            ffi::webui_send_raw(
+                self.handle(),
+                func_cstring.as_ptr(),
+                buf.as_ptr() as *const _,
+                buf.len(),
+            )
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -195,26 +210,31 @@ impl Event {
         }
     }
 
-    pub fn set_response(&mut self, response: impl AsRef<[u8]>) {
+    pub fn set_response(&mut self, response: &str) {
         unsafe {
             ffi::webui_interface_set_response(
                 self.window.handle(),
                 self.event_number,
-                response.as_ref().as_ptr() as *const i8,
+                response.as_ptr() as *const i8,
             );
         }
     }
 }
 
 unsafe extern "C" fn event_handler(
-    window: usize,
+    window_number: usize,
     event_type: usize,
     element_ptr: *mut std::os::raw::c_char,
     event_number: usize,
     bind_id: usize,
 ) {
-    let window = Window::with_id(window);
-    let element = CStr::from_ptr(element_ptr).to_str().unwrap().to_string();
+    let window = Window {
+        handle: window_number,
+    };
+    let element = CStr::from_ptr(element_ptr)
+        .to_str()
+        .expect("element name is not valid utf8")
+        .to_string();
     let mut event = Event {
         window,
         event_type: event_type.try_into().unwrap(),
@@ -224,7 +244,7 @@ unsafe extern "C" fn event_handler(
     };
     {
         let cbs = EVENT_HANDLERS.read().unwrap();
-        cbs[&bind_id](&mut event);
+        cbs.get(&bind_id).expect("no such bind id")(&mut event);
     }
 }
 
