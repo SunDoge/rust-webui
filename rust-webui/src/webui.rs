@@ -32,6 +32,7 @@ pub enum Browser {
     ChromiumBased,
 }
 
+#[derive(Debug)]
 pub struct Window(usize);
 
 impl Window {
@@ -49,6 +50,7 @@ impl Window {
 
     pub fn show(&self, content: &str) -> bool {
         let cstring = CString::new(content).unwrap();
+        dbg!(&cstring);
         unsafe { ffi::webui_show(self.0, cstring.as_ptr()) }
     }
 
@@ -83,13 +85,17 @@ impl Window {
     }
 
     pub fn bind(&self, element: &str, func: impl Fn(Event) + 'static) {
+        println!("element {}", element);
         let cstring = CString::new(element).unwrap();
 
         let bind_id =
             unsafe { ffi::webui_interface_bind(self.0, cstring.as_ptr(), Some(event_handler)) };
 
+        println!("bind id: {}", bind_id);
+
         CALLBACKS.with(move |cbs| {
             cbs.borrow_mut().insert(bind_id, Box::new(func));
+            dbg!(&cbs.borrow().keys());
         });
     }
 }
@@ -117,6 +123,7 @@ impl TryFrom<usize> for EventType {
     }
 }
 
+#[derive(Debug)]
 pub struct Event {
     pub window: Window,
     pub event_type: EventType,
@@ -132,7 +139,9 @@ unsafe extern "C" fn event_handler(
     event_number: usize,
     bind_id: usize,
 ) {
+    dbg!(window, event_type, bind_id);
     CALLBACKS.with(|cbs| {
+        dbg!(cbs.borrow().keys());
         cbs.borrow().get(&bind_id).map(|cb| {
             let window = Window(window);
             let element = CStr::from_ptr(element_ptr).to_str().unwrap().to_string();
