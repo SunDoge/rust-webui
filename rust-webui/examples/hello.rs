@@ -2,7 +2,7 @@ use rust_webui::Window;
 
 fn main() {
     let window = Window::new();
-    let res = window.show_browser(
+    let res = window.show(
         r#"
     <html>
     <script src="webui.js"></script>
@@ -10,7 +10,7 @@ fn main() {
     <button id="x">click</button>
     <button onclick="webui.call('func1', 'hello', 1, true).then(res=>console.log(res, typeof(res)))">pass args</button>
     </html>
-    "#, rust_webui::Browser::ChromiumBased
+    "#
     );
     dbg!(res);
     // window.bind("x", |event| {

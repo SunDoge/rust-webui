@@ -182,15 +182,15 @@ impl TryFrom<usize> for EventType {
 }
 
 #[derive(Debug)]
-pub struct Event {
+pub struct Event<'a> {
     pub window: Window,
     pub event_type: EventType,
-    pub element: String,
+    pub element: &'a str,
     pub event_number: usize,
     pub bind_id: usize,
 }
 
-impl Event {
+impl<'a> Event<'a> {
     pub fn get_int_at(&self, index: usize) -> i64 {
         unsafe { ffi::webui_interface_get_int_at(self.window.handle(), self.event_number, index) }
     }
@@ -211,11 +211,22 @@ impl Event {
     }
 
     pub fn set_response(&mut self, response: &str) {
+        let cstring = CString::new(response).unwrap();
         unsafe {
             ffi::webui_interface_set_response(
                 self.window.handle(),
                 self.event_number,
-                response.as_ptr() as *const i8,
+                cstring.as_ptr(),
+            );
+        }
+    }
+
+    pub fn set_cstr_response(&mut self, response: &std::ffi::CStr) {
+        unsafe {
+            ffi::webui_interface_set_response(
+                self.window.handle(),
+                self.event_number,
+                response.as_ptr(),
             );
         }
     }
@@ -233,8 +244,7 @@ unsafe extern "C" fn event_handler(
     };
     let element = CStr::from_ptr(element_ptr)
         .to_str()
-        .expect("element name is not valid utf8")
-        .to_string();
+        .expect("element name is not valid utf8");
     let mut event = Event {
         window,
         event_type: event_type.try_into().unwrap(),
@@ -244,7 +254,7 @@ unsafe extern "C" fn event_handler(
     };
     {
         let cbs = EVENT_HANDLERS.read().unwrap();
-        cbs.get(&bind_id).expect("no such bind id")(&mut event);
+        cbs[&bind_id](&mut event);
     }
 }
 
