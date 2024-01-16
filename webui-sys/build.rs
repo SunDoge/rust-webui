@@ -1,5 +1,5 @@
-const WEBUI_VERSION: &str = "2.4.2";
-const WEBUI_RELEASE_BASE_URL: &str = "https://github.com/webui-dev/webui/releases/download";
+// const WEBUI_VERSION: &str = "2.4.2";
+// const WEBUI_RELEASE_BASE_URL: &str = "https://github.com/webui-dev/webui/releases/download";
 
 fn main() {
     link_webui();

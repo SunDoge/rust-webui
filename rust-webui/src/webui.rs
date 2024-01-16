@@ -119,8 +119,14 @@ impl Window {
         unsafe { ffi::webui_set_root_folder(self.handle(), cstring.as_ptr()) }
     }
 
-    pub fn set_icon(&self, icon: &str, icon_type: &str) {
-        // unsafe {ffi::webui_set_icon(self.id(), icon, icon_type)}
+    pub fn set_icon(&mut self, icon: &str, icon_type: &str) {
+        let icon_c = CString::new(icon).unwrap();
+        let icon_type_c = CString::new(icon_type).unwrap();
+        unsafe { ffi::webui_set_icon(self.handle(), icon_c.as_ptr(), icon_type_c.as_ptr()) }
+    }
+
+    pub fn set_port(&mut self, port: usize) -> bool {
+        unsafe { ffi::webui_set_port(self.handle(), port) }
     }
 
     pub fn set_runtime(&mut self, runtime: Runtime) {
