@@ -9,7 +9,7 @@ use std::{
 
 use webui_sys as ffi;
 
-type CallbackMap = HashMap<usize, Box<dyn Fn(Event) + Send + Sync>>;
+type CallbackMap = HashMap<usize, Box<dyn Fn(&mut Event) + Send + Sync>>;
 
 static EVENT_HANDLERS: Lazy<RwLock<CallbackMap>> = Lazy::new(|| RwLock::new(HashMap::new()));
 
@@ -44,14 +44,14 @@ pub enum Runtime {
 
 pub struct Window {
     handle: usize,
-    file_handler: Option<Box<dyn Fn(&str)>>,
+    // file_handler: Option<Box<dyn Fn(&str)>>,
 }
 
 impl Debug for Window {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Window")
             .field("handle", &self.handle)
-            .field("file_handler", &self.file_handler.is_some())
+            // .field("file_handler", &self.file_handler.is_some())
             .finish()
     }
 }
@@ -65,56 +65,56 @@ impl Default for Window {
 impl Window {
     pub fn new() -> Self {
         let window_id = unsafe { ffi::webui_new_window() };
-        Self {
-            handle: window_id,
-            file_handler: None,
-        }
+        Self { handle: window_id }
     }
 
-    pub fn id(&self) -> usize {
+    pub fn handle(&self) -> usize {
         self.handle
     }
 
+    pub fn get_window_id(&self) -> usize {
+        unsafe { ffi::webui_interface_get_window_id(self.handle()) }
+    }
+    
     pub fn with_id(window_number: usize) -> Self {
         unsafe {
             ffi::webui_new_window_id(window_number);
         }
         Self {
             handle: window_number,
-            file_handler: None,
+            // file_handler: None,
         }
     }
 
     pub fn show(&self, content: &str) -> bool {
         let cstring = CString::new(content).unwrap();
-        dbg!(&cstring);
-        unsafe { ffi::webui_show(self.id(), cstring.as_ptr()) }
+        unsafe { ffi::webui_show(self.handle(), cstring.as_ptr()) }
     }
 
     pub fn show_browser(&self, content: &str, browser: Browser) -> bool {
         let cstring = CString::new(content).unwrap();
-        unsafe { ffi::webui_show_browser(self.id(), cstring.as_ptr(), browser as usize) }
+        unsafe { ffi::webui_show_browser(self.handle(), cstring.as_ptr(), browser as usize) }
     }
 
     pub fn is_shown(&self) -> bool {
-        unsafe { ffi::webui_is_shown(self.id()) }
+        unsafe { ffi::webui_is_shown(self.handle()) }
     }
 
     pub fn set_size(&mut self, width: u32, height: u32) {
         unsafe {
-            ffi::webui_set_size(self.id(), width, height);
+            ffi::webui_set_size(self.handle(), width, height);
         }
     }
 
     pub fn set_position(&mut self, x: u32, y: u32) {
         unsafe {
-            ffi::webui_set_position(self.id(), x, y);
+            ffi::webui_set_position(self.handle(), x, y);
         }
     }
 
     pub fn set_root_folder(&mut self, path: impl AsRef<Path>) -> bool {
         let cstring = CString::new(path.as_ref().as_os_str().to_str().unwrap()).unwrap();
-        unsafe { ffi::webui_set_root_folder(self.id(), cstring.as_ptr()) }
+        unsafe { ffi::webui_set_root_folder(self.handle(), cstring.as_ptr()) }
     }
 
     pub fn set_icon(&self, icon: &str, icon_type: &str) {
@@ -123,17 +123,18 @@ impl Window {
 
     pub fn set_runtime(&mut self, runtime: Runtime) {
         unsafe {
-            ffi::webui_set_runtime(self.id(), runtime as usize);
+            ffi::webui_set_runtime(self.handle(), runtime as usize);
         }
     }
 
     // pub fn set_file_handler()
 
-    pub fn bind(&self, element: &str, func: impl Fn(Event) + Send + Sync + 'static) {
+    pub fn bind(&self, element: &str, func: impl Fn(&mut Event) + Send + Sync + 'static) {
         let cstring = CString::new(element).unwrap();
 
-        let bind_id =
-            unsafe { ffi::webui_interface_bind(self.id(), cstring.as_ptr(), Some(event_handler)) };
+        let bind_id = unsafe {
+            ffi::webui_interface_bind(self.handle(), cstring.as_ptr(), Some(event_handler))
+        };
 
         {
             let mut cbs = EVENT_HANDLERS.write().unwrap();
@@ -176,21 +177,31 @@ pub struct Event {
 
 impl Event {
     pub fn get_int_at(&self, index: usize) -> i64 {
-        unsafe { ffi::webui_interface_get_int_at(self.window.id(), self.event_number, index) }
+        unsafe { ffi::webui_interface_get_int_at(self.window.handle(), self.event_number, index) }
     }
 
     pub fn get_bool_at(&self, index: usize) -> bool {
-        unsafe { ffi::webui_interface_get_bool_at(self.window.id(), self.event_number, index) }
+        unsafe { ffi::webui_interface_get_bool_at(self.window.handle(), self.event_number, index) }
     }
 
     pub fn get_string_at(&self, index: usize) -> &str {
         unsafe {
             let ptr =
-                ffi::webui_interface_get_string_at(self.window.id(), self.event_number, index);
+                ffi::webui_interface_get_string_at(self.window.handle(), self.event_number, index);
             let length =
-                ffi::webui_interface_get_size_at(self.window.id(), self.event_number, index);
+                ffi::webui_interface_get_size_at(self.window.handle(), self.event_number, index);
             let s = std::slice::from_raw_parts(ptr as *const u8, length);
             std::str::from_utf8_unchecked(s)
+        }
+    }
+
+    pub fn set_response(&mut self, response: impl AsRef<[u8]>) {
+        unsafe {
+            ffi::webui_interface_set_response(
+                self.window.handle(),
+                self.event_number,
+                response.as_ref().as_ptr() as *const i8,
+            );
         }
     }
 }
@@ -204,7 +215,7 @@ unsafe extern "C" fn event_handler(
 ) {
     let window = Window::with_id(window);
     let element = CStr::from_ptr(element_ptr).to_str().unwrap().to_string();
-    let event = Event {
+    let mut event = Event {
         window,
         event_type: event_type.try_into().unwrap(),
         element,
@@ -213,28 +224,30 @@ unsafe extern "C" fn event_handler(
     };
     {
         let cbs = EVENT_HANDLERS.read().unwrap();
-        cbs[&bind_id](event);
+        cbs[&bind_id](&mut event);
     }
 }
 
-// unsafe extern "C" fn file_handler(
-
-// )
-
 pub fn wait() {
-    unsafe {
-        ffi::webui_wait();
-    }
+    unsafe { ffi::webui_wait() }
 }
 
 pub fn clean() {
-    unsafe {
-        ffi::webui_clean();
-    }
+    unsafe { ffi::webui_clean() }
+}
+
+pub fn is_app_running() -> bool {
+    unsafe { ffi::webui_interface_is_app_running() }
 }
 
 pub fn set_timeout(second: usize) {
-    unsafe {
-        ffi::webui_set_timeout(second);
-    }
+    unsafe { ffi::webui_set_timeout(second) }
+}
+
+pub fn get_new_window_id() -> usize {
+    unsafe { ffi::webui_get_new_window_id() }
+}
+
+pub fn exit() {
+    unsafe { ffi::webui_exit() }
 }
