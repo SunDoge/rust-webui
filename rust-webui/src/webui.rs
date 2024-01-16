@@ -31,12 +31,24 @@ pub enum Browser {
 }
 
 #[derive(Debug)]
+#[repr(usize)]
+pub enum Runtime {
+    None = 0,
+    Deno,
+    NodeJs,
+}
+
+#[derive(Debug)]
 pub struct Window(usize);
 
 impl Window {
     pub fn new() -> Self {
         let window_id = unsafe { ffi::webui_new_window() };
         Self(window_id)
+    }
+
+    pub fn id(&self) -> usize {
+        self.0
     }
 
     pub fn with_id(window_number: usize) -> Self {
@@ -82,6 +94,12 @@ impl Window {
         // unsafe {ffi::webui_set_icon(self.0, icon, icon_type)}
     }
 
+    pub fn set_runtime(&mut self, runtime: Runtime) {
+        unsafe {
+            ffi::webui_set_runtime(self.0, runtime as usize);
+        }
+    }
+
     pub fn bind(&self, element: &str, func: impl Fn(Event) + Send + Sync + 'static) {
         let cstring = CString::new(element).unwrap();
 
@@ -125,6 +143,27 @@ pub struct Event {
     pub element: String,
     pub event_number: usize,
     pub bind_id: usize,
+}
+
+impl Event {
+    pub fn get_int_at(&self, index: usize) -> i64 {
+        unsafe { ffi::webui_interface_get_int_at(self.window.id(), self.event_number, index) }
+    }
+
+    pub fn get_bool_at(&self, index: usize) -> bool {
+        unsafe { ffi::webui_interface_get_bool_at(self.window.id(), self.event_number, index) }
+    }
+
+    pub fn get_string_at(&self, index: usize) -> &str {
+        unsafe {
+            let ptr =
+                ffi::webui_interface_get_string_at(self.window.id(), self.event_number, index);
+            let length =
+                ffi::webui_interface_get_size_at(self.window.id(), self.event_number, index);
+            let s = std::slice::from_raw_parts(ptr as *const u8, length);
+            std::str::from_utf8_unchecked(s)
+        }
+    }
 }
 
 unsafe extern "C" fn event_handler(
