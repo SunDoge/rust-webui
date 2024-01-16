@@ -2,8 +2,7 @@ use rust_webui::Window;
 
 fn main() {
     let window = Window::new();
-    dbg!(&window);
-    let res = window.show(
+    window.show(
         r#"
     <html>
     <script src="webui.js"></script>
@@ -12,8 +11,6 @@ fn main() {
     </html>
     "#,
     );
-    dbg!(res);
-    dbg!(&window);
     window.bind("x", |event| {
         dbg!(event);
     });

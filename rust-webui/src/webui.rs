@@ -1,18 +1,16 @@
-use once_cell::sync::OnceCell;
+use once_cell::sync::Lazy;
 use std::{
-    borrow::Borrow,
     collections::HashMap,
     ffi::{CStr, CString},
     path::Path,
-    sync::{Mutex, RwLock},
+    sync::RwLock,
 };
 
-use std::cell::RefCell;
 use webui_sys as ffi;
 
-thread_local! {
-    static CALLBACKS: RefCell<HashMap<usize, Box<dyn Fn(Event)>>> = RefCell::new(HashMap::new());
-}
+type CallbackMap = HashMap<usize, Box<dyn Fn(Event) + Send + Sync>>;
+
+static CALLBACKS: Lazy<RwLock<CallbackMap>> = Lazy::new(|| RwLock::new(HashMap::new()));
 
 #[derive(Debug)]
 #[repr(usize)]
@@ -84,19 +82,16 @@ impl Window {
         // unsafe {ffi::webui_set_icon(self.0, icon, icon_type)}
     }
 
-    pub fn bind(&self, element: &str, func: impl Fn(Event) + 'static) {
-        println!("element {}", element);
+    pub fn bind(&self, element: &str, func: impl Fn(Event) + Send + Sync + 'static) {
         let cstring = CString::new(element).unwrap();
 
         let bind_id =
             unsafe { ffi::webui_interface_bind(self.0, cstring.as_ptr(), Some(event_handler)) };
 
-        println!("bind id: {}", bind_id);
-
-        CALLBACKS.with(move |cbs| {
-            cbs.borrow_mut().insert(bind_id, Box::new(func));
-            dbg!(&cbs.borrow().keys());
-        });
+        {
+            let mut cbs = CALLBACKS.write().unwrap();
+            cbs.insert(bind_id, Box::new(func));
+        }
     }
 }
 
@@ -139,22 +134,19 @@ unsafe extern "C" fn event_handler(
     event_number: usize,
     bind_id: usize,
 ) {
-    dbg!(window, event_type, bind_id);
-    CALLBACKS.with(|cbs| {
-        dbg!(cbs.borrow().keys());
-        cbs.borrow().get(&bind_id).map(|cb| {
-            let window = Window(window);
-            let element = CStr::from_ptr(element_ptr).to_str().unwrap().to_string();
-            let event = Event {
-                window,
-                event_type: event_type.try_into().unwrap(),
-                element,
-                event_number,
-                bind_id,
-            };
-            cb(event);
-        })
-    });
+    let window = Window(window);
+    let element = CStr::from_ptr(element_ptr).to_str().unwrap().to_string();
+    let event = Event {
+        window,
+        event_type: event_type.try_into().unwrap(),
+        element,
+        event_number,
+        bind_id,
+    };
+    {
+        let cbs = CALLBACKS.read().unwrap();
+        cbs[&bind_id](event);
+    }
 }
 
 pub fn wait() {
