@@ -5,16 +5,11 @@ const App: Component = () => {
   const [x, setX] = createSignal(0);
   const [y, setY] = createSignal(0);
 
-  const [sumStr, setSumStr] = createSignal('');
-  const [sumNum, setSumNum] = createSignal(0);
+  const [sum, setSum] = createSignal(0);
 
   createEffect(() => {
-    webui.call('add', x(), y()).then((res) => {
-      setSumStr(res);
-    });
-
     webuiCall<number>("add2", { x: x(), y: y() }).then((res) => {
-      setSumNum(res);
+      setSum(res);
     });
   })
 
@@ -42,9 +37,7 @@ const App: Component = () => {
             onInput={(e) => setY(Number(e.target.value))}
           />
         </div>
-
-        <p class="text-xl font-semibold mb-4">Sum: {sumStr()}</p>
-        <p class="text-xl font-semibold mb-4">Sum2: {sumNum()}</p>
+        <p class="text-xl font-semibold mb-4">Sum2: {sum()}</p>
       </div>
     </div>
   );
