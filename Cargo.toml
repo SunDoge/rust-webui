@@ -2,7 +2,7 @@
 
 
 [workspace]
-members = ["webui-sys", "rust-webui"]
+members = ["webui-sys", "rust-webui", "examples/solidjs-demo"]
 resolver = "2"
 
 
