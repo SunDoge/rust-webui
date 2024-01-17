@@ -1,18 +1,21 @@
 import { createSignal, type Component, createEffect } from 'solid-js';
+import { webuiCall } from './utils';
 
 const App: Component = () => {
-  const [x, setX] = createSignal("");
-  const [y, setY] = createSignal("");
+  const [x, setX] = createSignal(0);
+  const [y, setY] = createSignal(0);
 
-  const [sum, setSum] = createSignal("");
+  const [sumStr, setSumStr] = createSignal('');
+  const [sumNum, setSumNum] = createSignal(0);
 
   createEffect(() => {
-    if (x() !== "" && y() !== "") {
-      webui.call('add', x(), y()).then((res) => {
-        console.log("res: ", res);
-        setSum(res)
-      })
-    }
+    webui.call('add', x(), y()).then((res) => {
+      setSumStr(res);
+    });
+
+    webuiCall<number>("add2", { x: x(), y: y() }).then((res) => {
+      setSumNum(res);
+    });
   })
 
   return (
@@ -26,7 +29,7 @@ const App: Component = () => {
             class="w-full border rounded-md p-2"
             type="number"
             value={x()}
-            onInput={(e) => setX(e.target.value)}
+            onInput={(e) => setX(Number(e.target.value))}
           />
         </div>
 
@@ -36,11 +39,12 @@ const App: Component = () => {
             class="w-full border rounded-md p-2"
             type="number"
             value={y()}
-            onInput={(e) => setY(e.target.value)}
+            onInput={(e) => setY(Number(e.target.value))}
           />
         </div>
 
-        <p class="text-xl font-semibold mb-4">Sum: {sum()}</p>
+        <p class="text-xl font-semibold mb-4">Sum: {sumStr()}</p>
+        <p class="text-xl font-semibold mb-4">Sum2: {sumNum()}</p>
       </div>
     </div>
   );

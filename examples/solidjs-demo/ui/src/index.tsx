@@ -12,4 +12,18 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
   );
 }
 
-render(() => <App />, root!);
+
+function renderAfterWebui() {
+  try {
+    if (webui !== undefined) {
+      render(() => <App />, root!);
+    }
+  } catch {
+    setTimeout(renderAfterWebui, 100)
+  }
+}
+
+renderAfterWebui()
+
+
+// render(() => <App />, root!);
